@@ -23,46 +23,33 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Accept Android SDK Licenses
-        run: |
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          yes | sdkmanager --licenses
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
 
-      - name: Install Android SDK
+      - name: Install Android Packages
         run: |
-          sdkmanager "platforms;android-35"
-          sdkmanager "build-tools;35.0.0"
-          sdkmanager "platform-tools"
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Build NRTV APK
+      - name: Find Android Project
+        id: project
         run: |
-          PROJECT=$(find . -maxdepth 4 \
+          FILE=$(find . -maxdepth 5 \
             \( -name settings.gradle -o -name settings.gradle.kts \) \
             -print -quit)
-
-          if [ -z "$PROJECT" ]; then
-            echo "ERROR: Android project settings.gradle not found."
+          if [ -z "$FILE" ]; then
+            echo "Android settings.gradle not found"
             exit 1
           fi
+          echo "dir=$(dirname "$FILE")" >> "$GITHUB_OUTPUT"
 
-          DIR=$(dirname "$PROJECT")
-
-          if [ ! -f "$DIR/gradlew" ]; then
-            echo "ERROR: Gradle wrapper not found."
-            exit 1
-          fi
-
+      - name: Build NRTV
+        run: |
+          DIR="${{ steps.project.outputs.dir }}"
           chmod +x "$DIR/gradlew"
           "$DIR/gradlew" -p "$DIR" assembleDebug
 
-          mkdir -p output
-          cp "$DIR"/app/build/outputs/apk/debug/*.apk output/
-
-      - name: Upload NRTV APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: NRTV-Live-Broadcaster
-          path: output/*.apk
+          path: ${{ steps.project.outputs.dir }}/app/build/outputs/apk/debug/*.apk
