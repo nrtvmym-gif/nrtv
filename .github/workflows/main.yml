@@ -1,5 +1,16 @@
 
-name: Build NRTV APK
+
+      - name: Build NRTV
+        run: |
+          DIR="${{ steps.project.outputs.dir }}"
+          gradle -p "$DIR" assembleDebug
+
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
 
 on:
   workflow_dispatch:
