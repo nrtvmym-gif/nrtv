@@ -12,42 +12,57 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Accept Android SDK Licenses
+        run: |
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          yes | sdkmanager --licenses
 
       - name: Install Android SDK
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        run: |
+          sdkmanager "platforms;android-35"
+          sdkmanager "build-tools;35.0.0"
+          sdkmanager "platform-tools"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
 
-      - name: Build APK
+      - name: Build NRTV APK
         run: |
-          if [ -f settings.gradle ]; then
-            DIR="."
-          elif [ -f NRTVLiveBroadcaster/settings.gradle ]; then
-            DIR="NRTVLiveBroadcaster"
-          else
-            echo "Cannot find Android project settings.gradle"
+          PROJECT=$(find . -maxdepth 4 \
+            \( -name settings.gradle -o -name settings.gradle.kts \) \
+            -print -quit)
+
+          if [ -z "$PROJECT" ]; then
+            echo "ERROR: Android project settings.gradle not found."
             exit 1
           fi
-          gradle -p "$DIR" --no-daemon assembleDebug
-          echo "APK_DIR=$DIR/app/build/outputs/apk/debug" >> "$GITHUB_ENV"
 
-      - name: Upload APK
+          DIR=$(dirname "$PROJECT")
+
+          if [ ! -f "$DIR/gradlew" ]; then
+            echo "ERROR: Gradle wrapper not found."
+            exit 1
+          fi
+
+          chmod +x "$DIR/gradlew"
+          "$DIR/gradlew" -p "$DIR" assembleDebug
+
+          mkdir -p output
+          cp "$DIR"/app/build/outputs/apk/debug/*.apk output/
+
+      - name: Upload NRTV APK
         uses: actions/upload-artifact@v4
         with:
-          name: NRTV-Live-Broadcaster-APK
-          path: ${{ env.APK_DIR }}/app-debug.apk
+          name: NRTV-Live-Broadcaster
+          path: output/*.apk
